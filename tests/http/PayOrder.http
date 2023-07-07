@@ -1,0 +1,76 @@
+GET localhost:22080/
+
+> {%
+    client.test("See the list of products", function () {
+        client.assert(response.status === 200, 'Status is OK');
+    });
+
+    const data = JSON.parse(response.body.trim());
+    const productId = data['items'][0]['id'];
+    client.log(`Set global productId to ${productId}`);
+    client.global.set('productId', productId);
+    client.global.set('productPrice', data['items'][0]['price']);
+%}
+
+###
+
+POST localhost:22080/orders
+
+{
+    "products": [
+        {
+            "id": "{{productId}}",
+            "count": 1
+        }
+    ]
+}
+
+> {%
+
+    client.test("The order has been created", function () {
+        client.assert(response.status === 201, 'Status is Created');
+        client.assert(data['order']['status'] == 'created', 'Order status is created')
+    });
+
+    const data = JSON.parse(response.body.trim());
+    const orderId = data['order']['id'];
+    client.log(`Set global orderId to ${orderId}`);
+    client.global.set('orderId', orderId);
+%}
+
+###
+
+POST localhost:22080/order/{{orderId}}/payment
+
+{
+    "sum": "{{productPrice}}"
+}
+
+> {%
+    const data = JSON.parse(response.body.trim());
+    client.log(data);
+    client.global.set('lastPaymentId', data['payment']['id']);
+    client.test("The order has been paid", function () {
+        client.assert(response.status === 201, 'Status is Created');
+        client.assert(data['payment']['status'] == 'done', 'The payment is done');
+        client.assert(data['payment']['order']['status'] == 'paid', 'The order is paid');
+    });
+ %}
+
+###
+POST localhost:22080/order/{{orderId}}/payment
+
+{
+    "sum": "{{productPrice}}"
+}
+
+> {%
+    const data = JSON.parse(response.body.trim());
+    client.log(data);
+    client.test("The order payment request order is idempotent", function () {
+        client.assert(response.status === 201, 'Status is Created');
+        client.assert(client.global.get('lastPaymentId') == data['payment']['id'], 'Id is the same');
+        client.assert(data['payment']['status'] == 'done', 'The payment is done');
+        client.assert(data['payment']['order']['status'] == 'paid', 'The order is paid');
+    });
+ %}

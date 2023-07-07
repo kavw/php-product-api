@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\CliApp;
+use App\Defaults;
+use function App\env;
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+(function(){
+    $app = CliApp::boot(
+        isDebug: env(Defaults::ENV_APP_DEBUG_PARAM, fn($v) => (bool) $v)
+    );
+    $app->run();
+})();

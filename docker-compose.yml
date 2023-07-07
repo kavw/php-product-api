@@ -1,0 +1,79 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15.3-alpine3.18
+    ports:
+      - ${POSTGRES_PORT}:5432
+    env_file:
+      - ./.env
+    environment:
+      PS1_SRV_NAME: postgres
+
+  nginx-fpm:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+      args:
+        APP_ROOT_PATH: ${APP_DIR_MAP}/public
+        APP_FASTCGI_PASS: php-fpm
+    volumes:
+      - ${APP_DIR}:${APP_DIR_MAP}
+    env_file:
+      - ./.env
+    environment:
+      PS1_SRV_NAME: nginx-fpm
+    ports:
+      - ${HTTP_PORT_NGINX_FPM}:80
+    depends_on:
+      - php-fpm
+
+  php-fpm: &php-fpm
+    build: &php-fpm-build
+      context: ./docker/php
+      dockerfile: Dockerfile
+      target: basic
+      args: &php-fpm-args
+        APP_CONTAINER_USER: ${APP_CONTAINER_USER}
+        APP_CONTAINER_UID: ${APP_CONTAINER_UID}
+        APP_CONTAINER_GID: ${APP_CONTAINER_GID}
+        APP_CONTAINER_VAR_DIR: ${APP_CONTAINER_VAR_DIR}
+        APP_CONTAINER_CACHE_DIR: ${APP_CONTAINER_CACHE_DIR}
+        APP_TIMEZONE: ${APP_TIMEZONE}
+        PHP_VER: ${PHP_VER}
+        PHP_SAPI: fpm
+    volumes:
+      - ${APP_DIR}:${APP_DIR_MAP}
+    working_dir: ${APP_DIR_MAP}
+    env_file:
+      - ./.env
+    environment:
+      PS1_SRV_NAME: php-fpm
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+
+  php-cli: &php-cli
+    <<: *php-fpm
+    build: &php-cli-build
+      <<: *php-fpm-build
+      target: basic
+      args:
+        <<: *php-fpm-args
+        PHP_SAPI: zts
+    environment:
+      PS1_SRV_NAME: php-zts
+
+  payment-gateway:
+    <<: *php-cli
+    build:
+      <<: *php-cli-build
+      target: roadrunner
+    ports:
+      - ${HTTP_PORT_PAYMENT_GATEWAY}:8080
+    entrypoint: [ 'rr', 'serve', '-c', '${APP_DIR_MAP}/rr/payment-gateway/rr.yaml' ]
+    env_file:
+      - ./.env
+    environment:
+      PS1_SRV_NAME: 'payment-gateway'

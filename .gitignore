@@ -9,6 +9,12 @@
 *.sln
 *.sw?
 
-# Environment files
+app/.ash_history
+app/*.log*
+app/.composer
+vendor
+var
+.tmp
 .env
 .*.env
+
